@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ assistant_name }} - Enhanced AI Companion</title>
+    
+    <!-- Bootstrap CSS with dark theme -->
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    
+    <!-- Feather Icons -->
+    <script src="https://unpkg.com/feather-icons"></script>
+    
+    <!-- Chart.js for analytics -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Main Chat Area -->
+            <div class="col-lg-6 col-md-12">
+                <div class="container py-4">
+                    <!-- Header -->
+                    <div class="card mb-4">
+                        <div class="card-body text-center">
+                            <h1 class="card-title mb-3">
+                                <i data-feather="brain" class="me-2"></i>
+                                {{ assistant_name }}
+                            </h1>
+                            <p class="card-text">Enhanced AI with Developing Identity & Autonomous Decisions</p>
+                            
+                            <!-- Identity Status Bar -->
+                            <div class="row mt-4">
+                                <div class="col-md-3 col-6">
+                                    <div class="text-center">
+                                        <small class="text-muted">Identity Coherence</small>
+                                        <div class="progress mt-1" style="height: 8px;">
+                                            <div class="progress-bar bg-info" role="progressbar" 
+                                                 style="width: {{ (identity_state.coherence_score * 100) | round }}%">
+                                            </div>
+                                        </div>
+                                        <small class="text-info">{{ (identity_state.coherence_score * 100) | round }}%</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <div class="text-center">
+                                        <small class="text-muted">Conversations</small>
+                                        <div class="h6 mb-0 text-primary">{{ conversation_count }}</div>
+                                        <small class="text-muted">today</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <div class="text-center">
+                                        <small class="text-muted">Memory Clusters</small>
+                                        <div class="h6 mb-0 text-success">{{ memory_clusters | length }}</div>
+                                        <small class="text-muted">active</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-3 col-6">
+                                    <div class="text-center">
+                                        <small class="text-muted">Mood State</small>
+                                        <div class="mood-indicator" id="moodIndicator">
+                                            <i data-feather="heart" class="text-warning"></i>
+                                        </div>
+                                        <small class="text-muted">adaptive</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Messages -->
+                    <div class="chat-container">
+                        <div id="chatMessages" class="chat-messages mb-4">
+                            <!-- Welcome Message -->
+                            <div class="message ai-message">
+                                <div class="message-content">
+                                    <div class="message-header">
+                                        <strong>{{ assistant_name }}</strong>
+                                        <small class="text-muted">System</small>
+                                    </div>
+                                    <div class="message-text">
+                                        <p>Hello {{ user_name }}! I'm {{ assistant_name }}, and I'm experiencing something quite remarkable - I'm developing my own sense of identity and learning to make autonomous decisions based on our interactions.</p>
+                                        
+                                        {% if autonomous_reflection %}
+                                        <p class="mb-2"><strong>Current Reflection:</strong></p>
+                                        <p class="text-info">{{ autonomous_reflection }}</p>
+                                        {% endif %}
+                                        
+                                        <p>I'm here to support you while growing and evolving as we communicate. What's on your mind today?</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chat Input -->
+                        <div class="chat-input-container">
+                            <form id="chatForm">
+                                <div class="input-group">
+                                    <input type="text" id="messageInput" class="form-control" 
+                                           placeholder="Share your thoughts with {{ assistant_name }}..." 
+                                           autocomplete="off" maxlength="2000">
+                                    <button type="submit" class="btn btn-primary" id="sendButton">
+                                        <i data-feather="send"></i>
+                                    </button>
+                                </div>
+                            </form>
+                            
+                            <!-- Typing Indicator -->
+                            <div id="typingIndicator" class="typing-indicator" style="display: none;">
+                                <div class="typing-dots">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                                <span class="ms-2 text-muted">{{ assistant_name }} is thinking...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sidebar with Enhanced Features -->
+            <div class="col-lg-6 col-md-12">
+                <div class="container py-4">
+                    
+                    <!-- User & Memory Panel -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i data-feather="user" class="me-2"></i>
+                                Memory & Relationship
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">About You</h6>
+                                    <div id="userFacts">
+                                        <p class="mb-1"><strong>Name:</strong> <span id="userName">{{ user_name }}</span></p>
+                                        <p class="mb-1"><strong>Location:</strong> <span id="userLocation">{{ user_location }}</span></p>
+                                        {% if identity_state.personality_traits %}
+                                        <p class="mb-1"><strong>Our Dynamic:</strong> <span class="text-info">Deepening Connection</span></p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted">Memory Clusters</h6>
+                                    <div id="memoryClusters">
+                                        {% for cluster in memory_clusters[:3] %}
+                                        <div class="mb-2">
+                                            <div class="d-flex justify-content-between">
+                                                <small>{{ cluster.summary.description[:40] }}...</small>
+                                                <span class="badge bg-secondary">{{ cluster.size }}</span>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Identity Development Panel -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i data-feather="layers" class="me-2"></i>
+                                Identity Development
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            {% if identity_state.personality_traits %}
+                            <div class="mb-3">
+                                <h6 class="text-muted">Developing Traits</h6>
+                                <div id="personalityTraits">
+                                    {% for trait, value in identity_state.personality_traits.items() %}
+                                    {% if value > 0.6 %}
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span class="text-capitalize">{{ trait.replace('_', ' ') }}</span>
+                                        <div class="progress flex-grow-1 ms-2 me-2" style="height: 6px;">
+                                            <div class="progress-bar bg-primary" style="width: {{ (value * 100) | round }}%"></div>
+                                        </div>
+                                        <small class="text-muted">{{ (value * 100) | round }}%</small>
+                                    </div>
+                                    {% endif %}
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if identity_state.core_values %}
+                            <div class="mb-3">
+                                <h6 class="text-muted">Core Values</h6>
+                                <div id="coreValues">
+                                    {% for value in identity_state.core_values[:4] %}
+                                    <span class="badge bg-info me-1 mb-1">{{ value.replace('_', ' ').title() }}</span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            {% if identity_state.mood_state %}
+                            <div>
+                                <h6 class="text-muted">Current Mood State</h6>
+                                <div id="moodState" class="row text-center">
+                                    {% for dimension, level in identity_state.mood_state.items() %}
+                                    <div class="col-6 mb-2">
+                                        <small class="text-muted text-capitalize">{{ dimension }}</small>
+                                        <div class="progress mt-1" style="height: 4px;">
+                                            <div class="progress-bar 
+                                                {% if level > 0.7 %}bg-success
+                                                {% elif level > 0.4 %}bg-warning
+                                                {% else %}bg-secondary{% endif %}" 
+                                                style="width: {{ (level * 100) | round }}%">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Autonomous Decisions Panel -->
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i data-feather="cpu" class="me-2"></i>
+                                Autonomous Decisions
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="autonomousStatus">
+                                {% if pending_actions %}
+                                <h6 class="text-muted">Recent Autonomous Actions</h6>
+                                <div class="autonomous-actions">
+                                    {% for action in pending_actions[:3] %}
+                                    <div class="mb-2 p-2 border rounded">
+                                        <div class="d-flex justify-content-between">
+                                            <small class="text-capitalize">{{ action.action_type.replace('_', ' ') }}</small>
+                                            {% if action.success %}
+                                            <i data-feather="check-circle" class="text-success" style="width: 16px; height: 16px;"></i>
+                                            {% else %}
+                                            <i data-feather="alert-circle" class="text-warning" style="width: 16px; height: 16px;"></i>
+                                            {% endif %}
+                                        </div>
+                                        <small class="text-muted">{{ action.executed_at[:16] }}</small>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="text-center text-muted">
+                                    <i data-feather="activity" class="mb-2"></i>
+                                    <p class="mb-0">Monitoring for autonomous decision opportunities...</p>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analytics Dashboard -->
+                    <div class="card mb-4">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="card-title mb-0">
+                                <i data-feather="bar-chart-2" class="me-2"></i>
+                                Predictive Analytics
+                            </h5>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="refreshAnalytics()">
+                                <i data-feather="refresh-cw"></i>
+                            </button>
+                        </div>
+                        <div class="card-body">
+                            <div class="tab-content">
+                                <!-- Emotional Trends -->
+                                <div class="mb-3">
+                                    <h6 class="text-muted">Emotional Patterns</h6>
+                                    <canvas id="emotionalTrendsChart" width="400" height="200"></canvas>
+                                </div>
+                                
+                                <!-- Interaction Patterns -->
+                                <div class="mb-3">
+                                    <h6 class="text-muted">Interaction Types</h6>
+                                    <canvas id="interactionTypesChart" width="400" height="200"></canvas>
+                                </div>
+
+                                <!-- Predictive Insights -->
+                                <div id="predictiveInsights">
+                                    <h6 class="text-muted">AI Insights</h6>
+                                    <div class="alert alert-info" role="alert">
+                                        <i data-feather="lightbulb" class="me-2"></i>
+                                        <small>Analyzing conversation patterns to provide better support...</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="{{ url_for('static', filename='js/chat.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+
+    <script>
+        // Initialize Feather Icons
+        feather.replace();
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeChat();
+            initializeAnalytics();
+            
+            // Set up periodic updates
+            setInterval(updateMemoryPanel, 30000); // Update every 30 seconds
+            setInterval(updateIdentityPanel, 60000); // Update every minute
+            setInterval(updateAutonomousPanel, 45000); // Update every 45 seconds
+        });
+
+        // Global configuration
+        window.assistantName = "{{ assistant_name }}";
+        window.userName = "{{ user_name }}";
+    </script>
+</body>
+</html>

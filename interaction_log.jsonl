@@ -1,0 +1,8 @@
+{"timestamp": "2025-07-08T21:21:14.398856", "type": "user_input", "data": {"content_length": 0, "intent": "general", "emotional_context": null}, "session_id": "2025-07-08T21:20:36.600897"}
+{"timestamp": "2025-07-08T21:21:16.474611", "type": "ai_response", "data": {"content_length": 0, "processing_time": 0.0, "model_used": "unknown"}, "session_id": "2025-07-08T21:20:36.600897"}
+{"timestamp": "2025-07-08T21:22:13.025687", "type": "user_input", "data": {"content_length": 0, "intent": "general", "emotional_context": null}, "session_id": "2025-07-08T21:20:36.600897"}
+{"timestamp": "2025-07-08T21:22:15.113123", "type": "ai_response", "data": {"content_length": 0, "processing_time": 0.0, "model_used": "unknown"}, "session_id": "2025-07-08T21:20:36.600897"}
+{"timestamp": "2025-07-08T21:22:53.441795", "type": "user_input", "data": {"content_length": 0, "intent": "general", "emotional_context": null}, "session_id": "2025-07-08T21:20:36.600897"}
+{"timestamp": "2025-07-08T21:22:58.191865", "type": "ai_response", "data": {"content_length": 0, "processing_time": 0.0, "model_used": "unknown"}, "session_id": "2025-07-08T21:20:36.600897"}
+{"timestamp": "2025-07-08T21:27:44.849847", "type": "user_input", "data": {"content_length": 0, "intent": "general", "emotional_context": null}, "session_id": "2025-07-08T21:20:36.600897"}
+{"timestamp": "2025-07-08T21:27:46.935238", "type": "ai_response", "data": {"content_length": 0, "processing_time": 0.0, "model_used": "unknown"}, "session_id": "2025-07-08T21:20:36.600897"}

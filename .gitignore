@@ -1,7 +1,18 @@
-# Environment variables
+# ============================================
+# Environment Variables & Secrets
+# ============================================
 .env
+.env.local
+.env.*.local
+*.key
+*.pem
+*.cert
+credentials.json
+service-account-key.json
 
+# ============================================
 # Python
+# ============================================
 __pycache__/
 *.py[cod]
 *$py.class
@@ -10,6 +21,8 @@ __pycache__/
 env/
 venv/
 ENV/
+env.bak/
+venv.bak/
 build/
 develop-eggs/
 dist/
@@ -22,43 +35,177 @@ parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.mypy_cache/
+.dmypy.json
+dmypy.json
 
-# Database
+# ============================================
+# Database Files
+# ============================================
 *.db
 *.sqlite
 *.sqlite3
+*.db-journal
+instance/
+*.db.backup
 
-# Logs
+# ============================================
+# Logs & Terminal Output
+# ============================================
 *.log
+*.log.*
 logs/
+data/terminal_logs/*.txt
+*.log.backup
 
-# Data files
+# ============================================
+# Data Files & User Content
+# ============================================
+# Exclude all data directories (contains user conversations, memories, etc.)
 data/
-*.jsonl
-*.npy
-*.pkl
+!data/terminal_logs/.gitkeep
+!data/.gitkeep
 
-# IDE
+# Specific data file types
+*.jsonl
+*.jsonl.backup
+*.npy
+*.npy.backup
+*.pkl
+*.pkl.backup
+*.h5
+*.pt
+*.pth
+
+# Knowledge graph and memory files
+data/structured_memory/knowledge_graph.json
+data/structured_memory/facts.json
+data/structured_memory/memory_index.json
+data/vector_memory/*.npy
+data/vector_memory/*.pkl
+data/vector_memory/memories.json
+data/episodic_memory/*.json
+data/reflections/**/*.json
+data/system_state.json
+data/metacognitive_state.json
+data/usage_tracking/*.jsonl
+
+# Backup files
+*.backup
+*.bak
+*_backup.*
+*_old.*
+
+# ============================================
+# Model Files & ML Artifacts
+# ============================================
+data/models/
+models/*.pkl
+models/*.h5
+models/*.pt
+models/*.pth
+models/*.onnx
+models/*.tflite
+*.weights
+checkpoints/
+
+# ============================================
+# IDE & Editor Files
+# ============================================
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
+.project
+.classpath
+.settings/
+*.sublime-project
+*.sublime-workspace
+.vscode-test/
 
-# OS
+# Jupyter Notebooks (if any)
+.ipynb_checkpoints/
+*.ipynb
+
+# ============================================
+# OS Files
+# ============================================
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+Desktop.ini
 
-# Model files
-models/*.pkl
-models/*.h5
-models/*.pt
-
-# Temporary files
+# ============================================
+# Temporary & Cache Files
+# ============================================
 *.tmp
-*.bak
+*.temp
 *.cache
+.cache/
+*.pyc
+*.pyo
+*.pyd
+.spyderproject
+.spyproject
+
+# ============================================
+# Cloud Storage & Upload Artifacts
+# ============================================
+uploads/
+static/uploads/*
+!static/uploads/.gitkeep
+backups/
+cloud_sync/
+
+# ============================================
+# Testing & Coverage
+# ============================================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.hypothesis/
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# ============================================
+# Documentation Build
+# ============================================
+docs/_build/
+site/
+
+# ============================================
+# Package & Distribution
+# ============================================
+dist/
+build/
+*.egg-info/
+.eggs/
+wheels/
+*.whl
+
+# ============================================
+# Local Configuration Overrides
+# ============================================
+config.local.json
+settings.local.json
+local_settings.py
 

@@ -15,24 +15,91 @@ def setup_logging():
         # Ensure log directory exists
         os.makedirs(LOG_DIR, exist_ok=True)
         
-        # Configure root logger
-        logging.basicConfig(
-            level=LOG_LEVEL,
-            format=LOG_FORMAT,
-            handlers=[
-                logging.FileHandler(os.path.join(LOG_DIR, 'mother_ai.log')),
-                logging.StreamHandler()  # Console output
-            ]
-        )
+        # Configure root logger with UTF-8 encoding for Windows compatibility
+        import sys
+        
+        # Get root logger to check if it's already configured
+        root_logger = logging.getLogger()
+        
+        handlers = [
+            logging.FileHandler(os.path.join(LOG_DIR, 'mother_ai.log'), encoding='utf-8'),
+        ]
+        
+        # Add console handler - try to configure UTF-8 on Windows, but handle errors gracefully
+        # IMPORTANT: Use sys.stdout directly (which may be redirected by terminal logger)
+        # This ensures all logging goes through the terminal logger if it's active
+        try:
+            if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
+                try:
+                    # Only reconfigure if stdout is not already redirected (not a TeeOutput)
+                    if not hasattr(sys.stdout, 'original_stream'):
+                        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+                except (ValueError, AttributeError, OSError):
+                    # stdout might be closed or redirected, skip reconfiguration
+                    pass
+            
+            # Create console handler - will use whatever stdout is (original or redirected)
+            # If terminal logger is active, this will use the redirected stdout
+            console_handler = logging.StreamHandler(sys.stdout)
+            handlers.append(console_handler)
+        except (ValueError, AttributeError, OSError):
+            # If stdout is closed or unavailable, just use file logging
+            pass
+        
+        # Only call basicConfig if logging hasn't been configured yet
+        # This prevents clearing handlers that were set up by terminal_logger
+        if not root_logger.handlers:
+            logging.basicConfig(
+                level=LOG_LEVEL,
+                format=LOG_FORMAT,
+                handlers=handlers
+            )
+        else:
+            # Logging already configured (e.g., by terminal_logger)
+            # Just add our file handler if not already present
+            file_handler_path = os.path.join(LOG_DIR, 'mother_ai.log')
+            has_file_handler = any(
+                isinstance(h, logging.FileHandler) and h.baseFilename == os.path.abspath(file_handler_path)
+                for h in root_logger.handlers
+            )
+            if not has_file_handler:
+                file_handler = logging.FileHandler(file_handler_path, encoding='utf-8')
+                file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
+                file_handler.setLevel(LOG_LEVEL)
+                root_logger.addHandler(file_handler)
+            
+            # Ensure console handler exists (for terminal output)
+            has_console_handler = any(
+                isinstance(h, logging.StreamHandler) and h.stream in (sys.stdout, sys.stderr)
+                for h in root_logger.handlers
+            )
+            if not has_console_handler and handlers:
+                # Add console handler from handlers list
+                for handler in handlers:
+                    if isinstance(handler, logging.StreamHandler):
+                        root_logger.addHandler(handler)
+                        break
+            
+            # Ensure root logger level is set
+            root_logger.setLevel(LOG_LEVEL)
         
         # Create specialized loggers
         create_specialized_loggers()
         
-        logging.info("[📝] Enhanced logging system initialized")
+        logging.info("[LOG] Enhanced logging system initialized")
         return True
         
     except Exception as e:
-        print(f"[ERROR] Logging setup failed: {e}")
+        # Use logging if available, otherwise try basic print with error handling
+        try:
+            logging.error(f"[ERROR] Logging setup failed: {e}")
+        except:
+            # Last resort - write to stderr if available
+            try:
+                import sys
+                sys.stderr.write(f"[ERROR] Logging setup failed: {e}\n")
+            except:
+                pass  # If even stderr fails, silently continue
         return False
 
 def create_specialized_loggers():

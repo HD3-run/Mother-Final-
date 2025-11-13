@@ -6,8 +6,8 @@ from typing import Dict, List, Any, Optional
 from collections import defaultdict, Counter
 import threading
 
-USAGE_STATS_FILE = 'data/usage_stats.json'
-INTERACTION_LOG_FILE = 'data/interaction_log.jsonl'
+USAGE_STATS_FILE = 'data/usage_tracking/usage_stats.json'
+INTERACTION_LOG_FILE = 'data/usage_tracking/interaction_log.jsonl'
 
 class UsageTracker:
     """Track system usage and interaction patterns"""
@@ -48,7 +48,7 @@ class UsageTracker:
     def save_usage_stats(self):
         """Save usage statistics to file"""
         try:
-            os.makedirs('data', exist_ok=True)
+            os.makedirs('data/usage_tracking', exist_ok=True)
             
             stats_data = {
                 'daily_stats': self.daily_stats,
@@ -166,7 +166,7 @@ class UsageTracker:
                 'session_id': self.session_stats['session_start']
             }
             
-            os.makedirs('data', exist_ok=True)
+            os.makedirs('data/usage_tracking', exist_ok=True)
             with open(INTERACTION_LOG_FILE, 'a') as f:
                 f.write(json.dumps(interaction_entry) + '\n')
                 

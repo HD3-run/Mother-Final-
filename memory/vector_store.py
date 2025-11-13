@@ -8,9 +8,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import pickle
 
-VECTOR_STORE_FILE = 'data/vector_store.json'
-VECTORIZER_FILE = 'data/vectorizer.pkl'
-EMBEDDINGS_FILE = 'data/embeddings.npy'
+VECTOR_STORE_FILE = 'data/vector_memory/memories.json'
+VECTORIZER_FILE = 'data/vector_memory/vectorizer.pkl'
+EMBEDDINGS_FILE = 'data/vector_memory/embeddings.npy'
 
 class VectorMemoryStore:
     """Enhanced vector memory store with semantic search"""
@@ -56,7 +56,7 @@ class VectorMemoryStore:
         """Save the vector store to disk"""
         try:
             # Ensure data directory exists
-            os.makedirs('data', exist_ok=True)
+            os.makedirs('data/vector_memory', exist_ok=True)
             
             # Save memories
             with open(VECTOR_STORE_FILE, 'w') as f:

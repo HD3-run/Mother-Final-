@@ -10,8 +10,8 @@ from sklearn.decomposition import PCA
 from collections import Counter
 import pickle
 
-CLUSTERS_FILE = 'data/memory_clusters.json'
-CLUSTER_MODEL_FILE = 'data/cluster_model.pkl'
+CLUSTERS_FILE = 'data/vector_memory/memory_clusters.json'
+CLUSTER_MODEL_FILE = 'data/vector_memory/cluster_model.pkl'
 
 class SemanticClusteringEngine:
     """Engine for semantic clustering of memories"""
@@ -30,7 +30,7 @@ class SemanticClusteringEngine:
     def initialize_clustering(self):
         """Initialize the clustering system"""
         try:
-            os.makedirs('data', exist_ok=True)
+            os.makedirs('data/vector_memory', exist_ok=True)
             
             if not os.path.exists(CLUSTERS_FILE):
                 initial_clusters = {

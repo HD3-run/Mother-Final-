@@ -4,14 +4,13 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 
-EPISODIC_LOG_DIR = 'logs/episodic'
-CONVERSATION_INDEX_FILE = 'logs/conversation_index.json'
+EPISODIC_LOG_DIR = 'data/episodic_memory'
+CONVERSATION_INDEX_FILE = 'data/episodic_memory/conversation_index.json'
 
 def init_episodic_logging():
     """Initialize episodic logging system"""
     try:
         os.makedirs(EPISODIC_LOG_DIR, exist_ok=True)
-        os.makedirs('logs', exist_ok=True)
         
         if not os.path.exists(CONVERSATION_INDEX_FILE):
             with open(CONVERSATION_INDEX_FILE, 'w') as f:

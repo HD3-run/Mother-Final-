@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, jsonify
 import logging
 import re
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os
 import traceback
 import json
@@ -16,10 +16,16 @@ from processing.predictive_modeling import predict_user_state, update_behavioral
 from personality.loader import load_config
 from personality.emotional_response import adjust_response_tone
 from personality.identity_engine import update_identity, get_identity_state, reflect_on_identity
-from memory.structured_store import set_fact, get_fact, all_facts # Removed init_db import
+from memory.structured_store import set_fact, get_fact, all_facts, get_knowledge_graph, save_knowledge_graph # Removed init_db import
+from memory.knowledge_harvester import KnowledgeHarvester
+from memory.conflict_resolver import handle_conflict_with_user
+from processing.symbolic_parser import SymbolicParser
 from memory.vector_store import add_memory, search_memory
 from memory.episodic_logger import log_event, get_today_log, get_conversation_history, get_log_for_date, get_all_conversation_dates
 from memory.semantic_clustering import cluster_memories, get_memory_clusters
+from memory.unified_query import think
+from processing.cognitive_agent import CognitiveAgent
+from processing.metacognitive_engine import MetacognitiveEngine
 from reflection.reflection_engine import get_reflection_for_date, generate_autonomous_reflection
 # Corrected import path for autonomous decision functions
 from reflection.autonomous_decision import make_autonomous_decision, get_pending_actions
@@ -54,8 +60,69 @@ def convert_numpy_types(obj):
     return obj
 
 def extract_facts(user_input):
-    """Enhanced fact extraction with semantic understanding"""
+    """Enhanced fact extraction with knowledge graph, verification, and conflict detection"""
     try:
+        # IMPORTANT: Don't extract facts from questions
+        # Check if input is a question first
+        user_input_lower = user_input.lower().strip()
+        question_indicators = ["what", "who", "where", "when", "why", "how", "which"]
+        is_question = (
+            any(user_input_lower.startswith(qw) for qw in question_indicators) or
+            user_input_lower.endswith("?")
+        )
+        
+        if is_question:
+            logging.info(f"[EXTRACT FACTS] Skipping fact extraction for question: '{user_input}'")
+            return None
+        
+        # Initialize components
+        graph = get_knowledge_graph()
+        harvester = KnowledgeHarvester(graph, config)
+        parser = SymbolicParser()
+        
+        # Use symbolic parser to extract facts
+        parsed_fact = parser.parse_fact(user_input)
+        
+        if parsed_fact:
+            # Check for conflicts before storing
+            subject = parsed_fact.get('subject', 'user')
+            relation = parsed_fact.get('relation', '')
+            obj = parsed_fact.get('object', '')
+            
+            if subject and relation and obj:
+                # Handle conflict detection
+                conflict_result = handle_conflict_with_user(
+                    graph,
+                    subject,
+                    relation,
+                    obj,
+                    new_confidence=0.8,
+                    new_provenance="user",
+                )
+                
+                if conflict_result.get('needs_clarification'):
+                    # Return clarification question to user
+                    clarification = conflict_result.get('clarification_question')
+                    logging.warning(f"[CONFLICT] Clarification needed: {clarification}")
+                    # Store this for later use in response
+                    return {"needs_clarification": True, "question": clarification}
+                
+                # No conflict or resolved - proceed with storage
+                if not conflict_result.get('has_conflict') or conflict_result.get('resolved'):
+                    # Use knowledge harvester to store
+                    harvest_result = harvester.harvest_from_sentence(
+                        user_input,
+                        topic=subject,
+                        provenance="user",
+                        confidence=0.8,
+                    )
+                    
+                    if harvest_result.get('success'):
+                        save_knowledge_graph()
+                        logging.info(f"[FACTS] Fact stored via knowledge harvester: {subject} --[{relation}]--> {obj}")
+        
+        # Also use traditional extraction for backward compatibility
+        # (This ensures existing code still works)
         # Enhanced name extraction with more patterns
         name_patterns = [
             r"\bmy name is ([A-Za-z0-9_ \-]+)",
@@ -106,193 +173,187 @@ def extract_facts(user_input):
                 value = match.group(1).strip()
                 set_fact(fact_type, value)
                 logging.info(f"[FACTS] {fact_type} extracted: {value}")
+        
+        # Pet information extraction
+        # Check if user mentions having pets
+        has_pets = bool(re.search(r"\bi have (?:a |an |two |three |four |five |\d+ )?(?:pet|pets|dog|dogs|cat|cats|rabbit|rabbits|bird|birds|hamster|hamsters|fish)", user_input, re.IGNORECASE))
+        
+        pet_types = []
+        pet_names = []
+        
+        # Extract pet types
+        pet_type_patterns = {
+            "dog": r"\b(?:dog|dogs)\b",
+            "cat": r"\b(?:cat|cats)\b",
+            "rabbit": r"\b(?:rabbit|rabbits)\b",
+            "bird": r"\b(?:bird|birds)\b",
+            "hamster": r"\b(?:hamster|hamsters)\b",
+            "fish": r"\b(?:fish|fishes)\b"
+        }
+        
+        for pet_type, pattern in pet_type_patterns.items():
+            if re.search(pattern, user_input, re.IGNORECASE):
+                pet_types.append(pet_type)
+        
+        # Extract pet names - multiple patterns to catch different formats
+        # Pattern 1: "rabbits names are X and Y"
+        match = re.search(r"(?:rabbit|rabbits|cat|cats|dog|dogs|bird|birds|hamster|hamsters|fish) (?:names?|name is|names are) (?:are|is) ([A-Za-z]+)(?: and ([A-Za-z]+))?", user_input, re.IGNORECASE)
+        if match:
+            if match.group(1):
+                pet_names.append(match.group(1).strip())
+            if match.group(2):
+                pet_names.append(match.group(2).strip())
+        
+        # Pattern 2: "named X and Y" or "called X and Y"
+        if not pet_names:
+            match = re.search(r"(?:named|called) ([A-Za-z]+)(?: and ([A-Za-z]+))?(?: and ([A-Za-z]+))?", user_input, re.IGNORECASE)
+            if match:
+                if match.group(1):
+                    pet_names.append(match.group(1).strip())
+                if match.group(2):
+                    pet_names.append(match.group(2).strip())
+                if match.group(3):
+                    pet_names.append(match.group(3).strip())
+        
+        # Pattern 3: "cat is named X" or "rabbit is called Y"
+        if not pet_names:
+            match = re.search(r"(?:cat|cats|rabbit|rabbits|dog|dogs) (?:is|are) (?:named|called) ([A-Za-z]+)", user_input, re.IGNORECASE)
+            if match:
+                pet_names.append(match.group(1).strip())
+        
+        # Pattern 4: "ones name is X other is Y" or "one's name is X other is Y"
+        if not pet_names:
+            match = re.search(r"(?:one'?s|ones) name is ([A-Za-z]+)(?:\s+other is ([A-Za-z]+))?", user_input, re.IGNORECASE)
+            if match:
+                if match.group(1):
+                    pet_names.append(match.group(1).strip())
+                if match.group(2):
+                    pet_names.append(match.group(2).strip())
+        
+        # Pattern 5: "one is named X, the other is Y" or "one is X, the other is Y"
+        if not pet_names:
+            match = re.search(r"one (?:is|named) ([A-Za-z]+)(?:,?\s+the other (?:is|named) ([A-Za-z]+))?", user_input, re.IGNORECASE)
+            if match:
+                if match.group(1):
+                    pet_names.append(match.group(1).strip())
+                if match.group(2):
+                    pet_names.append(match.group(2).strip())
+        
+        # Store pet information if found
+        if has_pets or pet_names or pet_types:
+            # Get existing pet info if any
+            existing_pets = get_fact("pets", {})
+            if isinstance(existing_pets, dict):
+                # Merge with existing data
+                existing_names = existing_pets.get('names', [])
+                if isinstance(existing_names, str):
+                    existing_names = [existing_names]
+                existing_types = existing_pets.get('types', [])
+                if isinstance(existing_types, str):
+                    existing_types = [existing_types]
+                
+                # Combine names and types
+                all_names = list(set(existing_names + pet_names))
+                all_types = list(set(existing_types + pet_types))
+            else:
+                all_names = pet_names
+                all_types = pet_types
+            
+            pet_info = {
+                "has_pets": True,
+                "count": len(all_names) if all_names else (len(all_types) if all_types else 1),
+                "types": all_types,
+                "names": all_names
+            }
+            set_fact("pets", pet_info)
+            logging.info(f"[FACTS] Pet information extracted: {pet_info}")
 
     except Exception as e:
         logging.error(f"[ERROR] Enhanced fact extraction failed: {e}")
 
 def handle_special_queries(user_input):
-    """Enhanced special query handling with semantic search"""
-    try:
-        user_lower = user_input.lower()
-        
-        # Check for queries asking for all dates we've talked
-        date_list_patterns = [
-            r"(?:apart from|excluding|other than).*today.*(?:what|which).*dates?.*(?:did|do|have).*we.*talk",
-            r"(?:what|which).*dates?.*(?:did|do|have).*we.*talk.*(?:on|about)",
-            r"(?:list|tell me|show me).*dates?.*(?:we|you and i).*(?:talk|convers|chat)",
-            r"(?:when|what dates).*(?:did|have).*we.*talk.*(?:before|apart from|excluding).*today",
-            r"all.*dates?.*(?:we|you and i).*(?:talk|convers|chat)",
-            # Follow-up queries asking for earlier dates
-            r"before that\??",
-            r"earlier\??",
-            r"any.*before",
-            r"dates?.*before"
-        ]
-        
-        for pattern in date_list_patterns:
-            if re.search(pattern, user_lower):
-                # Get all conversation dates (excluding today if requested)
-                exclude_today = any(word in user_lower for word in ['apart from', 'excluding', 'other than', 'before'])
-                dates = get_all_conversation_dates(exclude_today=exclude_today)
-                
-                if dates:
-                    # Format dates nicely
-                    formatted_dates = []
-                    for date_str in dates:
-                        try:
-                            date_obj = datetime.strptime(date_str, "%Y-%m-%d")
-                            formatted_dates.append(date_obj.strftime("%B %d, %Y"))
-                        except:
-                            formatted_dates.append(date_str)
-                    
-                    if len(formatted_dates) == 1:
-                        response = f"We talked on {formatted_dates[0]}."
-                        # If only one date and user asked "before that", clarify it's the earliest
-                        if any(word in user_lower for word in ['before that', 'earlier', 'any before']):
-                            response = f"{formatted_dates[0]} is the earliest date I have in my records. That's the first conversation I can recall before today."
-                    elif len(formatted_dates) <= 5:
-                        response = f"We've talked on {len(formatted_dates)} date{'s' if len(formatted_dates) > 1 else ''}: {', '.join(formatted_dates)}."
-                        # If asking for earlier dates, mention the earliest
-                        if any(word in user_lower for word in ['before that', 'earlier', 'any before']):
-                            response += f" The earliest date in my records is {formatted_dates[0]}."
-                    else:
-                        # Show first few and last few
-                        first_few = ', '.join(formatted_dates[:3])
-                        last_few = ', '.join(formatted_dates[-2:])
-                        response = f"We've talked on {len(formatted_dates)} dates. Some of them include: {first_few}... and more recently {last_few}."
-                        # If asking for earlier dates, mention the earliest
-                        if any(word in user_lower for word in ['before that', 'earlier', 'any before']):
-                            response += f" The earliest date in my records is {formatted_dates[0]}."
-                    
-                    return {
-                        "response": response,
-                        "sentiment": "informative",
-                        "intent": "date_list",
-                        "special_query": True
-                    }
-                else:
-                    return {
-                        "response": "I don't have any recorded conversation dates yet. Today might be our first conversation, or the records might not be available.",
-                        "sentiment": "informative",
-                        "intent": "date_list",
-                        "special_query": True
-                    }
-        
-        # Enhanced date reflection queries - improved pattern matching
-        date_patterns = [
-            # Pattern: "what did we talk about on july 8th 2025" or "july 8, 2025"
-            r"(?:what did we|what we|did we).*(?:talk about|discuss|say).*(?:on\s)?(\d{1,2})(?:st|nd|rd|th)?(?:\s*,?\s*)?(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s*,?\s*)?(\d{4})?",
-            # Pattern: "what happened on july 8th"
-            r"(?:what happened|remember|recall).*(?:on\s)?(\d{1,2})(?:st|nd|rd|th)?(?:\s+of)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s*,?\s*)?(\d{4})?",
-            # Pattern: "7/8/2025" or "7-8-2025"
-            r"(?:what did we|what we|did we).*(?:talk about|discuss).*(?:on\s)?(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})",
-            # Pattern: "yesterday", "last week", "last month"
-            r"(?:what did we|what we|did we).*(?:talk about|discuss).*(yesterday|last week|last month)",
-            # Pattern: "our conversation on..."
-            r"(?:our conversation|what we discussed).*(?:about|regarding|on)\s+(.+)"
-        ]
-        
-        # Check for date queries first
-        for pattern in date_patterns:
-            match = re.search(pattern, user_lower)
-            if match:
-                date_str = None
-                
-                # Handle relative dates
-                if "yesterday" in user_lower:
-                    yesterday = datetime.now() - timedelta(days=1)
-                    date_str = yesterday.strftime("%Y-%m-%d")
-                elif "last week" in user_lower:
-                    last_week = datetime.now() - timedelta(days=7)
-                    date_str = last_week.strftime("%Y-%m-%d")
-                elif "last month" in user_lower:
-                    last_month = datetime.now() - timedelta(days=30)
-                    date_str = last_month.strftime("%Y-%m-%d")
-                else:
-                    # Handle specific date formats
-                    groups = match.groups()
-                    
-                    # Format: "july 8th 2025" or "july 8, 2025" (3 groups: day, month, year)
-                    if len(groups) == 3 and groups[2] and groups[2].isdigit():
-                        day = int(groups[0])
-                        month = groups[1].capitalize()
-                        year = int(groups[2])
-                        try:
-                            month_num = datetime.strptime(month, "%B").month
-                            date_str = f"{year}-{month_num:02d}-{day:02d}"
-                        except ValueError:
-                            continue
-                    # Format: "july 8th" without year (2 groups: day, month) - assume current year
-                    elif len(groups) >= 2 and groups[0].isdigit():
-                        day = int(groups[0])
-                        month = groups[1].capitalize()
-                        try:
-                            month_num = datetime.strptime(month, "%B").month
-                            year = datetime.now().year
-                            date_str = f"{year}-{month_num:02d}-{day:02d}"
-                        except ValueError:
-                            continue
-                    # Format: "7/8/2025" (3 groups: month, day, year)
-                    elif len(groups) == 3 and all(g.isdigit() for g in groups if g):
-                        month, day, year = groups
-                        date_str = f"{year}-{int(month):02d}-{int(day):02d}"
-                
-                if date_str:
-                    # Get actual conversations from that date
-                    daily_log = get_log_for_date(date_str)
-                    
-                    if daily_log:
-                        # Format conversations naturally
-                        conversation_summary = format_date_conversations(date_str, daily_log)
-                        return {
-                            "response": conversation_summary,
-                            "sentiment": "reflective",
-                            "intent": "date_reflection",
-                            "special_query": True
-                        }
-                    else:
-                        # No conversations found for that date
-                        return {
-                            "response": f"I don't have any recorded conversations from {date_str}. We might not have talked that day, or the records might not be available.",
-                            "sentiment": "informative",
-                            "intent": "date_reflection",
-                            "special_query": True
-                        }
-
-        user_lower = user_input.lower()
-        
-        # Enhanced memory search with semantic clustering
-        memory_patterns = [
-            r"(?:what did we|do you remember).*(?:talk about|discuss|say about)\s+(.+)",
-            r"remember when we (?:talked about|discussed) (.+)",
-            r"what do you know about (.+)",
-            r"(?:tell me about|recall) (.+)",
-            r"do you remember (.+)"
-        ]
-
-        for pattern in memory_patterns:
-            match = re.search(pattern, user_input.lower())
-            if match:
-                topic = match.group(1).strip()
-                memories = search_memory(topic, limit=5)
-                clustered_memories = cluster_memories(memories)
-                
-                if memories:
-                    memory_text = "\n".join([f"• {mem['content']}" for mem in memories])
-                    cluster_info = f"\nI've organized {len(clustered_memories)} related memory clusters about this topic."
-                    
-                    return {
-                        "response": f"Here's what I remember about {topic}:\n\n{memory_text}{cluster_info}",
-                        "sentiment": "informative",
-                        "intent": "memory_search",
-                        "special_query": True,
-                        "memory_clusters": clustered_memories
-                    }
-
-    except Exception as e:
-        logging.error(f"[ERROR] Enhanced special query handling failed: {e}")
+    """
+    Unified special query handling using MOTHER's thinking process
     
-    return None
+    This function now uses the unified memory query system that queries
+    all memory layers (structured, vector, episodic, reflections) simultaneously,
+    mimicking human cognition where the brain accesses multiple memory systems.
+    """
+    try:
+        # Use MOTHER's unified thinking process
+        thinking_result = think(user_input)
+        
+        # If we have a high-confidence answer, return it directly
+        if thinking_result.get('confidence', 0) >= 0.7 and thinking_result.get('answer'):
+            intent = _infer_intent_from_query(user_input)
+            
+            logging.info(f"[🧠] Unified thinking provided answer (confidence: {thinking_result['confidence']:.2f})")
+            logging.info(f"[🧠] Reasoning: {thinking_result.get('reasoning', 'N/A')}")
+            
+            return {
+                "response": thinking_result['answer'],
+                "sentiment": "informative",
+                "intent": intent,
+                "special_query": True,
+                "thinking_metadata": {
+                    "confidence": thinking_result['confidence'],
+                    "reasoning": thinking_result.get('reasoning', ''),
+                    "sources_used": [k for k, v in thinking_result.get('sources', {}).items() if v]
+                }
+            }
+        
+        # If confidence is moderate but we have an answer, still return it
+        # (but mark that LLM could enhance it)
+        if thinking_result.get('confidence', 0) >= 0.4 and thinking_result.get('answer'):
+            intent = _infer_intent_from_query(user_input)
+            
+            logging.info(f"[🧠] Unified thinking provided moderate-confidence answer (confidence: {thinking_result['confidence']:.2f})")
+            
+            return {
+                "response": thinking_result['answer'],
+                "sentiment": "informative",
+                "intent": intent,
+                "special_query": True,
+                "thinking_metadata": {
+                    "confidence": thinking_result['confidence'],
+                    "reasoning": thinking_result.get('reasoning', ''),
+                    "sources_used": [k for k, v in thinking_result.get('sources', {}).items() if v],
+                    "note": "Answer from memory, but LLM could provide more context"
+                }
+            }
+        
+        # Low confidence or no answer - let it fall through to LLM
+        # The thinking_result['sources'] will be available for context building
+        if thinking_result.get('sources'):
+            logging.info(f"[🧠] Unified thinking found context but no direct answer - using LLM with memory context")
+            # Sources will be used by context builder
+        
+        return None  # Let normal flow handle it with LLM
+        
+    except Exception as e:
+        logging.error(f"[ERROR] Unified thinking failed: {e}")
+        traceback.print_exc()
+        return None  # Fall back to normal flow
+
+
+def _infer_intent_from_query(query: str) -> str:
+    """Infer intent from query for response metadata"""
+    query_lower = query.lower()
+    
+    if any(word in query_lower for word in ['pet', 'pets', 'dog', 'cat', 'rabbit']):
+        return "pet_query"
+    elif any(word in query_lower for word in ['date', 'when', 'july', 'august', 'yesterday']):
+        return "date_query"
+    elif any(word in query_lower for word in ['remember', 'recall', 'what did we']):
+        return "memory_query"
+    elif any(word in query_lower for word in ['name', 'location', 'age', 'job']):
+        return "fact_query"
+    else:
+        return "general_query"
+
+
+# Note: All query handling is now done by the unified thinking system in memory/unified_query.py
+# The think() function queries all memory layers simultaneously and synthesizes results
 
 def format_date_conversations(date_str: str, daily_log: List[Dict]) -> str:
     """Format conversations from a specific date into a natural response"""
@@ -543,10 +604,41 @@ def home():
                                autonomous_reflection="System initializing...",
                                config=config)
 
+# Initialize Cognitive Agent and Metacognitive Engine (optional, can be enabled in config)
+_cognitive_agent: Optional[CognitiveAgent] = None
+_metacognitive_engine: Optional[MetacognitiveEngine] = None
+
+def _get_cognitive_agent() -> Optional[CognitiveAgent]:
+    """Get or create the Cognitive Agent instance."""
+    global _cognitive_agent
+    if _cognitive_agent is None and config.get("enable_cognitive_agent", False):
+        try:
+            _cognitive_agent = CognitiveAgent(config)
+            logging.info("[COGNITIVE] Cognitive Agent initialized")
+        except Exception as e:
+            logging.error(f"[ERROR] Failed to initialize Cognitive Agent: {e}")
+    return _cognitive_agent
+
+def _get_metacognitive_engine() -> Optional[MetacognitiveEngine]:
+    """Get or create the Metacognitive Engine instance."""
+    global _metacognitive_engine
+    if _metacognitive_engine is None and config.get("enable_metacognitive_engine", False):
+        try:
+            _metacognitive_engine = MetacognitiveEngine(config)
+            logging.info("[METACOGNITIVE] Metacognitive Engine initialized")
+        except Exception as e:
+            logging.error(f"[ERROR] Failed to initialize Metacognitive Engine: {e}")
+    return _metacognitive_engine
+
 @chat_api.route("/chat", methods=["POST"])
 def chat():
     """Enhanced chat endpoint with identity formation and predictive modeling"""
     try:
+        # Update cycle manager with user interaction (for idle detection)
+        from flask import current_app
+        if hasattr(current_app, 'cycle_manager') and current_app.cycle_manager:
+            current_app.cycle_manager.update_user_interaction()
+        
         user_input = request.json.get("message", "").strip()
         if not user_input:
             return jsonify({"error": "Empty message"}), 400
@@ -554,16 +646,68 @@ def chat():
         log_user_input()
         logging.info(f"[CHAT] Received input: {user_input}")
 
+        # Try Cognitive Agent first (if enabled)
+        cognitive_agent = _get_cognitive_agent()
+        if cognitive_agent:
+            try:
+                logging.info(f"[ROUTES] Calling cognitive agent for: '{user_input}'")
+                cognitive_response = cognitive_agent.chat(user_input)
+                logging.info(f"[ROUTES] Cognitive agent returned response (length: {len(cognitive_response) if cognitive_response else 0})")
+                
+                if cognitive_response and not cognitive_response.strip().startswith("I'm not sure"):
+                    # Record interaction for metacognitive analysis
+                    metacognitive = _get_metacognitive_engine()
+                    if metacognitive:
+                        metacognitive.record_interaction(
+                            success=True,
+                            interaction_type="cognitive_chat",
+                            metadata={"response_length": len(cognitive_response)}
+                        )
+                    
+                    # Still do some MOTHER-specific processing
+                    log_event(user_input, cognitive_response, get_sentiment(user_input), {}, {})
+                    
+                    # IMPORTANT: Don't call extract_facts for questions - cognitive agent already handled it
+                    # Only extract facts if it's clearly a statement (not a question)
+                    user_input_lower = user_input.lower().strip()
+                    question_indicators = ["what", "who", "where", "when", "why", "how", "which"]
+                    is_question = (
+                        any(user_input_lower.startswith(qw) for qw in question_indicators) or
+                        user_input_lower.endswith("?")
+                    )
+                    
+                    if not is_question:
+                        # Only extract facts for statements
+                        extract_facts(user_input)
+                    
+                    return jsonify({
+                        "response": cognitive_response,
+                        "sentiment": get_sentiment(user_input),
+                        "intent": "cognitive_agent",
+                        "emotional_context": {},
+                        "predicted_state": {},
+                        "identity_evolution": get_identity_coherence_score(),
+                        "cognitive_mode": True,
+                    })
+                else:
+                    logging.info(f"[ROUTES] Cognitive agent returned unclear response, falling back to standard flow")
+            except Exception as e:
+                logging.warning(f"[COGNITIVE] Cognitive Agent failed, falling back to standard flow: {e}")
+                import traceback
+                logging.error(f"[COGNITIVE] Traceback: {traceback.format_exc()}")
+                # Fall through to standard processing
+        
+        # Check if this is a special query BEFORE standard processing
+        # This handles pet queries, date queries, etc. that cognitive agent might miss
+        special_response = handle_special_queries(user_input)
+        if special_response and special_response.get("response"):
+            return jsonify(special_response)
+
         # Extract and store structured facts
         extract_facts(user_input)
         
         # Update behavioral patterns
         update_behavioral_patterns(user_input)
-
-        # Handle special queries (date reflections, memory searches)
-        special_response = handle_special_queries(user_input)
-        if special_response:
-            return jsonify(special_response)
 
         # Detect intent with enhanced capabilities
         intent = detect_intent(user_input)

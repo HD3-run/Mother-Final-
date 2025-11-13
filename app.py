@@ -17,6 +17,8 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 
 # Setup logging (basic config, can be enhanced)
+# Note: Terminal logging should be set up in main.py before this
+# This basicConfig will be overridden by utils.logger.setup_logging() later
 logging.basicConfig(level=logging.DEBUG)
 
 def create_app():
@@ -75,6 +77,57 @@ def create_app():
         # Initialize autonomous decision scheduler
         scheduler = BackgroundScheduler()
         schedule_autonomous_tasks(scheduler)
+        
+        # Initialize autonomous learning cycles (if enabled)
+        if config.get("enable_autonomous_learning", True):
+            try:
+                from memory.structured_store import get_knowledge_graph
+                from memory.knowledge_harvester import KnowledgeHarvester
+                from processing.cycle_manager import CycleManager
+                from processing.universal_interpreter import UniversalInterpreter
+                from memory.lexicon_manager import LexiconManager
+                from processing.metacognitive_engine import MetacognitiveEngine
+                
+                # Get components
+                graph = get_knowledge_graph()
+                interpreter = UniversalInterpreter(config)
+                lexicon = LexiconManager(graph)
+                
+                # Create harvester with interpreter and lexicon
+                harvester = KnowledgeHarvester(
+                    graph=graph,
+                    config=config,
+                    interpreter=interpreter,
+                    lexicon=lexicon,
+                )
+                
+                # Create metacognitive engine (if enabled)
+                metacognitive_engine = None
+                if config.get("enable_metacognitive_engine", False):
+                    try:
+                        metacognitive_engine = MetacognitiveEngine(config)
+                    except Exception as e:
+                        logging.warning(f"[Cycle Manager] Metacognitive engine not available: {e}")
+                
+                # Create and start cycle manager
+                cycle_manager = CycleManager(
+                    scheduler=scheduler,
+                    harvester=harvester,
+                    metacognitive_engine=metacognitive_engine,
+                    config=config,
+                )
+                cycle_manager.start()
+                
+                # Store cycle manager in app context for routes to access
+                app.cycle_manager = cycle_manager
+                
+                logging.info("[🧠] Autonomous learning cycles initialized")
+            except Exception as e:
+                logging.warning(f"[Cycle Manager] Failed to initialize autonomous learning: {e}")
+                app.cycle_manager = None
+        else:
+            app.cycle_manager = None
+        
         scheduler.start()
         
         logging.info("[🚀] Enhanced MOTHER AI System initialized")
